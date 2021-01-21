@@ -288,6 +288,7 @@ for i = 1:idx_end
 end
 
 wf_final = ArrayOfRDWaveforms(wf_array)
+# wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
 
 # plot_wf = plot(wf_array)
 # png(plot_wf, "step02-mcpss-wf-current.png")
@@ -304,14 +305,15 @@ t1pss_raw = Table(
     channel = mcpss.channel,
     energy = online_energy,
     ievt = mcpss.ievt,
-    # numtraces = ?
-    # packet_id = array of 1 (0?)
+    numtraces = ones(length(baseline)), # number of triggered detectors (1 for HADES)
+    packet_id = zeros(length(baseline)), # means to packet losses
     timestamp = getindex.(mctruth.thit, 1), # frist MC truth hit time of each event?
-    # tracelist = connected with numtraces
-    waveform = wf_final,
-    wf_max = maximum.(wf_final.value) # ?
-    # wf_std = ?
+    tracelist = [[1] for idx in 1:length(baseline)], # lists of ADCs that triggered, 1 for HADES all the time
+    # waveform = wf_final,
+    wf_max = maximum.(wf_final.value), # ?
+    # wf_std = stderr.(wf_final.value) # ?
 )
+
 
 ##
 
