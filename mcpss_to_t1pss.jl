@@ -196,13 +196,13 @@ function daq_trigger(wf)
         end
     end
 
+    ts = range(T(0)u"ns", step = daq_Δt, length = daq_nsamples)
     # in case it didn't trigger
     if(t0_idx == 0)
-        stored_waveform = wf # just to return something
+        stored_waveform = RDWaveform(ts, wf.value[1:daq_nsamples]) # just to return something
         online_energy = 0u"keV" # flag meaning didn't trigger
     else
         online_energy = uconvert(u"keV", maximum(online_filter_output) * germanium_ionization_energy / c)
-        ts = range(T(0)u"ns", step = daq_Δt, length = daq_nsamples)
         iStart = t0_idx-daq_baseline_length
         stored_waveform = RDWaveform(ts, wf.value[iStart:iStart+daq_nsamples-1]);
     end
@@ -212,12 +212,12 @@ end
 
 ##
 
-curdir = "/home/sagitta/_legend/pss/"
+#curdir = "/home/sagitta/_legend/pss/"
 
 # function main()
 ### Read mcpss events
 det_name = "V05266A"
-mcpss_file = "$curdir/cache/$(det_name)_mcpss.h5"
+mcpss_file = "cache/$(det_name)_mcpss.h5"
 mcpss = read_mcpss(mcpss_file)
 
 ### Create arrays to be filled with results, and online energy
@@ -288,7 +288,7 @@ for i = 1:idx_end
 end
 
 wf_final = ArrayOfRDWaveforms(wf_array)
-# wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
+wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
 
 # plot_wf = plot(wf_array)
 # png(plot_wf, "step02-mcpss-wf-current.png")
@@ -308,10 +308,10 @@ t1pss_raw = Table(
     numtraces = ones(length(baseline)), # number of triggered detectors (1 for HADES)
     packet_id = zeros(length(baseline)), # means to packet losses
     timestamp = getindex.(mctruth.thit, 1), # frist MC truth hit time of each event?
-    tracelist = [[1] for idx in 1:length(baseline)], # lists of ADCs that triggered, 1 for HADES all the time
-    # waveform = wf_final,
+    tracelist = VectorOfVectors([[1] for idx in 1:length(baseline)]), # lists of ADCs that triggered, 1 for HADES all the time
+    waveform = wf_final,
     wf_max = maximum.(wf_final.value), # ?
-    # wf_std = stderr.(wf_final.value) # ?
+    wf_std = std.(wf_final.value[1:daq_baseline_length]) # ?
 )
 
 
@@ -325,7 +325,7 @@ t1pss_raw = Table(
 #
 
 @info "Saving table"
-out_filename = "$curdir/cache/$(det_name)_t1pss.h5"
+out_filename = "cache/$(det_name)_t1pss.h5"
 HDF5.h5open(out_filename, "w") do f
     LegendDataTypes.writedata(f, "raw", t1pss_raw)
 end
@@ -336,4 +336,4 @@ println("Done")
 
 ##
 
-main()
+#main()
