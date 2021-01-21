@@ -33,9 +33,9 @@ germanium_ionization_energy = T(2.95)u"eV"
 
 # Let's say DAQ always stores 5000 samples. So the final waveform length is 5000.
 # Has to be smaller than total waveform length (total_waveform_length in mcraw_to_mcpss.jl)
-daq_nsamples = 5000; # samples per waveform
+daq_nsamples = 4000; # samples per waveform
 
-daq_baseline_length = 1000;
+daq_baseline_length = 400;
 daq_sampling_rate = 250u"MHz"
 daq_Δt = uconvert(u"ns", inv(daq_sampling_rate));
 
@@ -69,7 +69,7 @@ function read_mcpss(filename)
 end
 
 function read_mctruth(filename)
-    @info "Reading mcpss"
+    @info "Reading MC truth"
     println(filename)
 
     HDF5.h5open(filename) do input
@@ -160,7 +160,11 @@ end
 
 function daq_baseline(wf)
     o = c * uconvert(u"eV", daq_offset) / germanium_ionization_energy
-    daq_buffer_wv = RDWaveform(wf.time, daq_type.(round.(wf.value .* c .+ o, digits = 0)))
+
+    # invert the pulse if needed
+    sign = wf.value[end] < 0 ? -1 : 1
+
+    daq_buffer_wv = RDWaveform(wf.time, daq_type.(round.(sign * wf.value .* c .+ o, digits = 0)))
     daq_buffer_wv
 end
 
@@ -179,6 +183,11 @@ function daq_trigger(wf)
 
     online_filter_output = zeros(T, length(wf.value) - daq_trigger_window_length)
     t0_idx = 0
+    trig = false
+
+    # while(not trig)
+    #     online_filter_output[i], trig = daq_online_filter(wf.value, i-1, daq_trigger_window_lengths, daq_trigger_threshold)
+    #     t0_idx = i
 
     for i in eachindex(online_filter_output)
         online_filter_output[i], trig = daq_online_filter(wf.value, i-1, daq_trigger_window_lengths, daq_trigger_threshold)
@@ -187,11 +196,16 @@ function daq_trigger(wf)
         end
     end
 
-    online_energy = uconvert(u"keV", maximum(online_filter_output) * germanium_ionization_energy / c)
-
-    ts = range(T(0)u"ns", step = daq_Δt, length = daq_nsamples)
-    iStart = t0_idx-daq_baseline_length
-    stored_waveform = RDWaveform(ts, wf.value[iStart:iStart+daq_nsamples-1]);
+    # in case it didn't trigger
+    if(t0_idx == 0)
+        stored_waveform = wf # just to return something
+        online_energy = 0u"keV" # flag meaning didn't trigger
+    else
+        online_energy = uconvert(u"keV", maximum(online_filter_output) * germanium_ionization_energy / c)
+        ts = range(T(0)u"ns", step = daq_Δt, length = daq_nsamples)
+        iStart = t0_idx-daq_baseline_length
+        stored_waveform = RDWaveform(ts, wf.value[iStart:iStart+daq_nsamples-1]);
+    end
 
     stored_waveform, online_energy
 end
@@ -200,120 +214,123 @@ end
 
 curdir = "/home/sagitta/_legend/pss/"
 
-function main()
-    ### Read mcpss events
-    det_name = "V05266A"
-    mcpss_file = "$curdir/cache/$(det_name)_mcpss.h5"
-    mcpss = read_mcpss(mcpss_file)
+# function main()
+### Read mcpss events
+det_name = "V05266A"
+mcpss_file = "$curdir/cache/$(det_name)_mcpss.h5"
+mcpss = read_mcpss(mcpss_file)
 
-    ### Create arrays to be filled with results, and online energy
-    idx_end = size(mcpss.waveforms,1)
-    # idx_end = 10
-    wf_array = Array{RDWaveform}(undef, idx_end)
-    temp = 1.0u"keV"; K = typeof(temp);
-    online_energy = Array{K}(undef, idx_end)
-    baseline = Array{T}(undef, idx_end)
-    baseline_rms = Array{T}(undef, idx_end)
+### Create arrays to be filled with results, and online energy
+idx_end = size(mcpss.waveforms,1)
+# idx_end = 10
+wf_array = Array{RDWaveform}(undef, idx_end)
+temp = 1.0u"keV"; K = typeof(temp);
+online_energy = Array{K}(undef, idx_end)
+baseline = Array{T}(undef, idx_end)
+baseline_rms = Array{T}(undef, idx_end)
 
-    plot_wf = plot(mcpss.waveforms[68])
-    png(plot_wf, "step01-mcpss-wf_68.png")
+# plot_wf = plot(mcpss.waveforms[68])
+# png(plot_wf, "step01-mcpss-wf_68.png")
 
-    ### loop over each wf and process it
-    for i = 1:idx_end
-        println(i)
+plot_wf = plot(mcpss.waveforms[804])
+png(plot_wf, "step01-mcpss-wf_804.png")
 
-        ### Differentiate
-        wf = differentiate_wf(mcpss.waveforms[i])
-        wf_array[i] = wf
+### loop over each wf and process it
+for i = 1:idx_end
+    # println(i)
 
-        ### 1. PreAmp Simulation
+    ### Differentiate
+    wf = differentiate_wf(mcpss.waveforms[i])
+    wf_array[i] = wf
 
-        #### 1.1. Simulate a charge sensitive amplifier (`CSA`)
-        wf_array[i] = simulate_csa(wf_array[i])
+    ### 1. PreAmp Simulation
 
-        # plot_wf = plot(
-        #     begin
-        #         plot(mcpss.waveforms[i], label = "true")
-        #         plot!(wf_array[i], label = "CSA Output")
-        #     end,
-        #     plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
-        #     layout = (2, 1)
-        # )
-        # png(plot_wf, "step03-preamp-decay1_wf$i.png")
+    #### 1.1. Simulate a charge sensitive amplifier (`CSA`)
+    wf_array[i] = simulate_csa(wf_array[i])
 
-
-        #### 1.2. Noise
-        wf_array[i] = simulate_noise(wf_array[i])
-
-
-        ### 2. DAQ Simulation
-
-        # Now we want to simulate, what the DAQ records
-        # The waveform will go rough the DAQ buffer on which the DAQ filter runs
-        # in order to trigger in case of an event and calculate some parameters
-        # like online energy
-        # In order to do so. The waveform should be longer the than the DAQ Buffer (here, 5000 samples)
-        # We took care of this at the beginning
-
-        #### 2.1. DAQ units and baseline
-        wf_array[i] = daq_baseline(wf_array[i])
-
-
-        #### 2.2. Trigger method
-        wf_array[i], online_energy[i] = daq_trigger(wf_array[i])
-
-        # plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
-        # png(plot_wf, "step06-daq-trigger1_wf$i.png")
-
-        baseline[i], baseline_rms[i] = mean_and_std(wf_array[i].value[1:daq_baseline_length])
-
-    end
-
-    wf_array = ArrayOfRDWaveforms(wf_array)
-
-    # plot_wf = plot(wf_array)
-    # png(plot_wf, "step02-mcpss-wf-current.png")
-    # png(plot_wf, "step04-preamp-noise1.png")
-    # png(plot_wf, "step05-daq-baseline1.png")
-    # println(online_energy[5])
-    # println(baseline[5])
-
-    # mctruth = read_mctruth(mcpss_file)
-
-    t1pss_raw = Table(
-        baseline = baseline,
-        channel = mcpss.channel,
-        energy = online_energy,
-        ievt = mcpss.ievt,
-        # numtraces = ?
-        # packet_id = array of 1 (0?)
-        # timestamp = mctruth.thit first element of each
-        # tracelist = connected with numtraces
-        waveform = wf_array
-        # wf_max = ?
-        # wf_min = ?
-    )
-
-    # mctruth = Table(
-    #     # fill wtih MC truth params
+    # plot_wf = plot(
+    #     begin
+    #         plot(mcpss.waveforms[i], label = "true")
+    #         plot!(wf_array[i], label = "CSA Output")
+    #     end,
+    #     plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
+    #     layout = (2, 1)
     # )
+    # png(plot_wf, "step03-preamp-decay1_wf$i.png")
 
-    #
-    # electruth = Table(
-    #     # fill in noise and DAQ parameters
-    # )
 
-    #
+    #### 1.2. Noise
+    wf_array[i] = simulate_noise(wf_array[i])
 
-    @info "Saving table"
-    out_filename = "$curdir/cache/$(det_name)_t1pss.h5"
-    h5open(out_filename, "w") do f
-        LegendDataTypes.writedata(f, "raw", t1pss_raw)
-    end
-    println("Done")
 
+    ### 2. DAQ Simulation
+
+    # Now we want to simulate, what the DAQ records
+    # The waveform will go rough the DAQ buffer on which the DAQ filter runs
+    # in order to trigger in case of an event and calculate some parameters
+    # like online energy
+    # In order to do so. The waveform should be longer the than the DAQ Buffer (here, 5000 samples)
+    # We took care of this at the beginning
+
+    #### 2.1. DAQ units and baseline
+    wf_array[i] = daq_baseline(wf_array[i])
+
+
+    #### 2.2. Trigger method
+    # if online energy is zero, means didn't trigger
+    wf_array[i], online_energy[i] = daq_trigger(wf_array[i])
+
+    # plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
+    # png(plot_wf, "step06-daq-trigger1_wf$i.png")
+
+    baseline[i], baseline_rms[i] = mean_and_std(wf_array[i].value[1:daq_baseline_length])
 
 end
+
+wf_final = ArrayOfRDWaveforms(wf_array)
+
+# plot_wf = plot(wf_array)
+# png(plot_wf, "step02-mcpss-wf-current.png")
+# png(plot_wf, "step04-preamp-noise1.png")
+# png(plot_wf, "step05-daq-baseline1.png")
+# println(online_energy[5])
+# println(baseline[5])
+
+mctruth = read_mctruth(mcpss_file)
+
+##
+t1pss_raw = Table(
+    baseline = baseline,
+    channel = mcpss.channel,
+    energy = online_energy,
+    ievt = mcpss.ievt,
+    # numtraces = ?
+    # packet_id = array of 1 (0?)
+    timestamp = getindex.(mctruth.thit, 1), # frist MC truth hit time of each event?
+    # tracelist = connected with numtraces
+    waveform = wf_final,
+    wf_max = maximum.(wf_final.value) # ?
+    # wf_std = ?
+)
+
+##
+
+#
+# electruth = Table(
+#     # fill in noise and DAQ parameters
+# )
+
+#
+
+@info "Saving table"
+out_filename = "$curdir/cache/$(det_name)_t1pss.h5"
+HDF5.h5open(out_filename, "w") do f
+    LegendDataTypes.writedata(f, "raw", t1pss_raw)
+end
+println("Done")
+
+
+# end
 
 ##
 

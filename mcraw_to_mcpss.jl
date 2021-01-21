@@ -27,7 +27,7 @@ Random.seed!(123) # only for testing
 # has to be larger than number of samples resulting from the online trigger filter of the DAQ
 n_baseline_samples = 2000; # SSD example was 1200;
 # has to be greater than DAQ waveform length (daq_nsamples in mcpss_to_t1pss.jl)
-total_waveform_length = 7000; 
+total_waveform_length = 8000; 
 
 ##
 
@@ -159,6 +159,7 @@ function simulate_wf(mcraw)
     waveforms = ArrayOfRDWaveforms(contact_charge_signals.waveform)
     
     # extend tail
+    println("Extending tail -> $(n_baseline_samples) baseline samples, wf length $(total_waveform_length)")
     waveforms = ArrayOfRDWaveforms(SolidStateDetectors.add_baseline_and_extend_tail.(waveforms, n_baseline_samples, total_waveform_length));
 
     # convert to Tier1 format
