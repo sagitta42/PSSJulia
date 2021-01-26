@@ -37,7 +37,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     g4sntuple = g4sfile["default_ntuples"]["g4sntuple"]
 
     evtno = read(g4sntuple["event"]["pages"])
-    detno = read(g4sntuple["iRep"]["pages"])
+    # detno = read(g4sntuple["iRep"]["pages"]) # no such thing for HADES
     thit = read(g4sntuple["t"]["pages"]).*u"ns"
     edep = read(g4sntuple["Edep"]["pages"]).*u"MeV"
     ekin = read(g4sntuple["KE"]["pages"]).*u"MeV"
@@ -70,7 +70,8 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # Construct a Julia DataFrame with the arrays we just constructed from the g4sfile data to make grouping easier
     raw_df = DataFrame(
             evtno = evtno,
-            detno = detno,
+            # detno = detno,
+            detno = VectorOfVectors([ones(len(thit[idx])) for idx in 1:length(thit)]), # 1 for HADES all the time
             thit = thit,
             edep = edep,
             pos = pos,
@@ -119,6 +120,6 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
 
     println("Processed file save to: $out_filename")
 
-end 
+end
 
 main()

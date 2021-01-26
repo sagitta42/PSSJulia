@@ -27,7 +27,7 @@ Random.seed!(123) # only for testing
 # has to be larger than number of samples resulting from the online trigger filter of the DAQ
 n_baseline_samples = 2000; # SSD example was 1200;
 # has to be greater than DAQ waveform length (daq_nsamples in mcpss_to_t1pss.jl)
-total_waveform_length = 8000; 
+total_waveform_length = 8000;
 
 ##
 
@@ -35,35 +35,35 @@ function simulate_detector(det_name)
     @info "Detector simulation"
     det_geom = "data/$(det_name).json"
     println("Reading geometry from $det_geom")
-    
+
     simulation = Simulation{T}(det_geom)
-    
+
     println("-> Electric potential...")
     calculate_electric_potential!( simulation,
                                max_refinements = 4)
-                               
+
     println("-> Electric field...")
     calculate_electric_field!(simulation, n_points_in_φ = 72)
-    
+
     println("-> Capacitance...")
     calculate_capacitance(simulation)
-    
+
     println("-> Drift field...")
     calculate_drift_fields!(simulation)
-    
+
     println("-> Weighting potential...")
     for contact in simulation.detector.contacts
         calculate_weighting_potential!(simulation, contact.id, max_refinements = 4, n_points_in_φ = 2, verbose = false)
     end
-    
+
     println("Saving...")
     det_h5 = "cache/$(det_name).h5f"
-    
+
     if !ispath(dirname(det_h5)) mkpath(dirname(det_h5)) end
     SolidStateDetectors.ssd_write(det_h5, simulation)
-    
+
     @info "Detector simulation complete"
-    
+
     simulation
 end
 
@@ -99,26 +99,28 @@ end
 function make_mc_events(filename)
 
     mc_events = read_mc_events(filename)
-    
+
     # Producing pulse shapes from raw MC events is wastful,
     # it's more efficient to cluster detectors hits (within a small radius) first:
-    println("$(sum(length.(mc_events.edep))) hits before clustering")
-    mc_events_clustered = @time SolidStateDetectors.cluster_detector_hits(mc_events, 0.2u"mm")
-    println("$(sum(length.(mc_events_clustered.edep))) hits after clustering")
+    # println("$(sum(length.(mc_events.edep))) hits before clustering")
+    # mc_events_clustered = @time SolidStateDetectors.cluster_detector_hits(mc_events, 0.2u"mm")
+    # println("$(sum(length.(mc_events_clustered.edep))) hits after clustering")
+    #
+    # # Waveform generation has to be per detector.
+    # # Let's reshuffle the detector hits, grouping by event number and detector:
+    # @info "Group by detector..."
+    # hits = ungroup_by_evtno(mc_events_clustered)
+    # mc_events_per_det = group_by_evtno_and_detno(hits)
+    #
+    # # The hits are now grouped by event number, but separately for each detector, and sorted by detector number:
+    # issorted(mc_events_per_det.detno)
+    #
+    # #This makes it easy to group them by detector number ...
+    # mc_events_det1 = filter(evt -> evt.detno == 1, mc_events_per_det)
+    #
+    # mc_events_det1
 
-    # Waveform generation has to be per detector.
-    # Let's reshuffle the detector hits, grouping by event number and detector:
-    @info "Group by detector..."
-    hits = ungroup_by_evtno(mc_events_clustered)
-    mc_events_per_det = group_by_evtno_and_detno(hits)
-
-    # The hits are now grouped by event number, but separately for each detector, and sorted by detector number:
-    issorted(mc_events_per_det.detno)
-
-    #This makes it easy to group them by detector number ...
-    mc_events_det1 = filter(evt -> evt.detno == 1, mc_events_per_det)
-
-    mc_events_det1
+    mc_events
 
 end
 
@@ -154,7 +156,7 @@ function simulate_wf(mcstp)
             verbose = false);
 
     waveforms = ArrayOfRDWaveforms(contact_charge_signals.waveform)
-    
+
     # extend tail
     println("Extending tail -> $(n_baseline_samples) baseline samples, wf length $(total_waveform_length)")
     waveforms = ArrayOfRDWaveforms(SolidStateDetectors.add_baseline_and_extend_tail.(waveforms, n_baseline_samples, total_waveform_length));
@@ -171,18 +173,20 @@ function simulate_wf(mcstp)
         edep = contact_charge_signals.edep,
         ievt = contact_charge_signals.evtno,
         pos = contact_charge_signals.pos,
-        thit = contact_charge_signals.thit                
+        thit = contact_charge_signals.thit
     )
 
     mcpss_table, mcpss_mctruth
 end
 
+##
+
 
 function main()
-
+    # curdir = "/home/sagitta/_legend/pss/"
     det_name = "V05266A"
     stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
-    
+    # stp_name = "V05266A"
     # detector simulation
     if isfile("cache/$(det_name).h5f")
         @info "Reading detector h5f"
@@ -190,7 +194,7 @@ function main()
     else
         simulation = simulate_detector(det_name)
     end
-        
+
 
     # prepare clustered events for single detector (already in h5 or CSV)
     mc_events = make_mc_events(stp_name)
@@ -220,4 +224,3 @@ end
 
 
 main()
-#main(true)
