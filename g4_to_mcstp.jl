@@ -67,11 +67,11 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     pos = [ SVector{3}(([ x[i], y[i], z[i] ] .* u"mm")...) for i in 1:n_ind ]
 
 
+    println("Constructing DataFrame")
     # Construct a Julia DataFrame with the arrays we just constructed from the g4sfile data to make grouping easier
     raw_df = DataFrame(
             evtno = evtno,
             # detno = detno,
-            detno = VectorOfVectors([ones(len(thit[idx])) for idx in 1:length(thit)]), # 1 for HADES all the time
             thit = thit,
             edep = edep,
             pos = pos,
@@ -84,6 +84,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
         )
 
 
+    println("Group by volume")
     # Save only events that occur in the detector PV
     gdf = groupby(raw_df, :volID)
 
@@ -94,9 +95,11 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # Need to turn DataFrame into a Table before using internal SSD functions (group_by_evtno, cluster_detector_hits, etc)
     # Only include parameters needed by SSD
 
+    println("Constructing table")
     hits_flat = Table(
         evtno = det_hits.evtno,
-        detno = det_hits.detno,
+#        detno = det_hits.detno,
+        detno = VectorOfVectors([ones(length(thit[idx])) for idx in 1:length(thit)]), # 1 for HADES all the time
         thit = det_hits.thit,
         edep = det_hits.edep,
         pos = det_hits.pos
