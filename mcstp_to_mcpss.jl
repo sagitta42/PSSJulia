@@ -73,11 +73,8 @@ function read_mc_events(mcfilename)
     # We'll either read from Geant4 CSV and cache the result as HDF5,
     # or read directly from HDF5 if already available:
 
-    mctruth_filename_csv = "data/$mcfilename.csv"
-    mctruth_filename_hdf5 = "cache/$mcfilename.h5"
-
-    # mctruth_filename_csv = joinpath(myfolder, "data", "dual-invcoax-mctruth.csv")
-    # mctruth_filename_hdf5 = joinpath(myfolder, "cache", "dual-invcoax-mctruth.h5")
+    mctruth_filename_csv = "data/$(mcfilename)_mcstp.csv"
+    mctruth_filename_hdf5 = "cache/$(mcfilename)_mcstp.h5"
 
     if isfile(mctruth_filename_hdf5)
         println("Reading MC events from HDF5.")
@@ -183,8 +180,10 @@ end
 
 function main()
 
-    # detector simulation
     det_name = "V05266A"
+    stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
+    
+    # detector simulation
     if isfile("cache/$(det_name).h5f")
         @info "Reading detector h5f"
         simulation = SolidStateDetectors.ssd_read("cache/$(det_name).h5f", Simulation)
@@ -194,7 +193,7 @@ function main()
         
 
     # prepare clustered events for single detector (already in h5 or CSV)
-    mc_events = make_mc_events("$(det_name)_mcstp")
+    mc_events = make_mc_events(stp_name)
 
     mcstp = MCstp(simulation, mc_events)
 
@@ -206,7 +205,7 @@ function main()
 
     # save results
     @info "Saving table..."
-    out_filename = "cache/$(det_name)_mcpss.h5"
+    out_filename = "cache/$(stp_name)_mcpss.h5"
     println("-> $out_filename")
     h5open(out_filename, "w") do f
         LegendDataTypes.writedata(f, "mcpss/mcpss", mcpss_table)
