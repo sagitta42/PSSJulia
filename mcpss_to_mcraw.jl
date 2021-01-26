@@ -215,7 +215,9 @@ end
 function main()
     ### Read mcpss events
     det_name = "V05266A"
-    mcpss_file = "cache/$(det_name)_mcpss.h5"
+    mcpss_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
+    mcpss_file = "cache/$(mcpss_name)_mcpss.h5"
+#    mcpss_file = "cache/$(det_name)_mcpss.h5"
     mcpss = read_mcpss(mcpss_file)
 
     ### Create arrays to be filled with results, and online energy
@@ -315,7 +317,7 @@ function main()
     #
 
     @info "Saving table..."
-    out_filename = "cache/$(det_name)_mcraw.h5"
+    out_filename = "cache/$(mcpss_name)_mcraw.h5"
     println("-> $out_filename")
     HDF5.h5open(out_filename, "w") do f
         LegendDataTypes.writedata(f, "raw", mcraw)

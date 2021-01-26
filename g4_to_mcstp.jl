@@ -13,16 +13,19 @@ using SolidStateDetectors: cluster_detector_hits
 using RadiationDetectorSignals: group_by_evtno, ungroup_by_evtno, group_by_evtno_and_detno
 using Unitful
 
+
 function main()
-    raw_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
+    # raw_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
+    raw_dir = "data/"
     processed_dir = "cache/"
-    base_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
+    base_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
     raw_extension = ".hdf5"
     processed_extension = ".h5"
 
     @info "Processing g4 events"
-    processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extension, processed_extension, icpc=false, oppi=false)
+    processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extension, processed_extension)
 end
+
 
 function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extension, processed_extension; icpc::Bool=false, oppi::Bool=false)
     # Use when you want to process a raw g4simple simulation output (hdf5) into a Table grouped by event
@@ -37,7 +40,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     g4sntuple = g4sfile["default_ntuples"]["g4sntuple"]
 
     evtno = read(g4sntuple["event"]["pages"])
-    # detno = read(g4sntuple["iRep"]["pages"]) # no such thing for HADES
+    detno = read(g4sntuple["iRep"]["pages"]) # no such thing for HADES
     thit = read(g4sntuple["t"]["pages"]).*u"ns"
     edep = read(g4sntuple["Edep"]["pages"]).*u"MeV"
     ekin = read(g4sntuple["KE"]["pages"]).*u"MeV"
@@ -52,15 +55,15 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     z = read(g4sntuple["z"]["pages"])
 
     # Translate z-coordinates to match SSD geometry-- CAGE specific
-    if icpc==true
-        println("Translating z-dimension so surface is at ICPC height")
-        z .+= (22.5 + 86.4)
-    elseif oppi==true
-        println("Translating z-dimension so surface is at OPPI height")
-        z .+= (22. + 51.)
-    else
-        println("Keeping in g4simple coordinates")
-    end
+    # if icpc==true
+    #     println("Translating z-dimension so surface is at ICPC height")
+    #     z .+= (22.5 + 86.4)
+    # elseif oppi==true
+    #     println("Translating z-dimension so surface is at OPPI height")
+    #     z .+= (22. + 51.)
+    # else
+    #     println("Keeping in g4simple coordinates")
+    # end
 
     # Construct array of positions for input to SSD
     n_ind = length(evtno)
@@ -71,7 +74,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # Construct a Julia DataFrame with the arrays we just constructed from the g4sfile data to make grouping easier
     raw_df = DataFrame(
             evtno = evtno,
-            # detno = detno,
+            detno = detno,
             thit = thit,
             edep = edep,
             pos = pos,
@@ -98,8 +101,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     println("Constructing table")
     hits_flat = Table(
         evtno = det_hits.evtno,
-#        detno = det_hits.detno,
-        detno = VectorOfVectors([ones(length(thit[idx])) for idx in 1:length(thit)]), # 1 for HADES all the time
+        detno = det_hits.detno,
         thit = det_hits.thit,
         edep = det_hits.edep,
         pos = det_hits.pos
@@ -107,8 +109,8 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
 
      # group hits by event number and cluster hits based on distance
     hits_by_evtno = group_by_evtno(hits_flat)
-    hits_clustered = cluster_detector_hits(hits_by_evtno, 0.2u"mm")
-    hits_by_det = group_by_evtno_and_detno(ungroup_by_evtno(hits_clustered))
+#    hits_clustered = cluster_detector_hits(hits_by_evtno, 0.2u"mm")
+#    hits_by_det = group_by_evtno_and_detno(ungroup_by_evtno(hits_clustered))
 
     # create output filename and save Table to .lh5
     out_filename = processed_dir *  base_filename * "_mcstp" * processed_extension
@@ -118,11 +120,14 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # Save output to .lh5
     h5open(out_filename, "w") do f
 #        LegendDataTypes.writedata(f, "SSD_detEvents", hits_by_det)
-        LegendDataTypes.writedata(f, "mctruth", hits_by_det)
+#        LegendDataTypes.writedata(f, "mctruth", hits_by_det)
+        LegendDataTypes.writedata(f, "mctruth", hits_by_evtno)
     end
 
     println("Processed file save to: $out_filename")
 
 end
+
+##
 
 main()

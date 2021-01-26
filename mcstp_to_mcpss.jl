@@ -102,25 +102,25 @@ function make_mc_events(filename)
 
     # Producing pulse shapes from raw MC events is wastful,
     # it's more efficient to cluster detectors hits (within a small radius) first:
-    # println("$(sum(length.(mc_events.edep))) hits before clustering")
-    # mc_events_clustered = @time SolidStateDetectors.cluster_detector_hits(mc_events, 0.2u"mm")
-    # println("$(sum(length.(mc_events_clustered.edep))) hits after clustering")
-    #
-    # # Waveform generation has to be per detector.
-    # # Let's reshuffle the detector hits, grouping by event number and detector:
-    # @info "Group by detector..."
-    # hits = ungroup_by_evtno(mc_events_clustered)
-    # mc_events_per_det = group_by_evtno_and_detno(hits)
-    #
-    # # The hits are now grouped by event number, but separately for each detector, and sorted by detector number:
-    # issorted(mc_events_per_det.detno)
-    #
-    # #This makes it easy to group them by detector number ...
-    # mc_events_det1 = filter(evt -> evt.detno == 1, mc_events_per_det)
-    #
-    # mc_events_det1
+    println("$(sum(length.(mc_events.edep))) hits before clustering")
+    mc_events_clustered = @time SolidStateDetectors.cluster_detector_hits(mc_events, 0.2u"mm")
+    println("$(sum(length.(mc_events_clustered.edep))) hits after clustering")
 
-    mc_events
+    # Waveform generation has to be per detector.
+    # Let's reshuffle the detector hits, grouping by event number and detector:
+    @info "Group by detector..."
+    hits = ungroup_by_evtno(mc_events_clustered)
+    mc_events_per_det = group_by_evtno_and_detno(hits)
+
+    # The hits are now grouped by event number, but separately for each detector, and sorted by detector number:
+    issorted(mc_events_per_det.detno)
+
+    #This makes it easy to group them by detector number ...
+    # currently there is only 1 detector with ID = 0
+    mc_events_det1 = filter(evt -> evt.detno == 0, mc_events_per_det)
+
+    mc_events_det1
+
 
 end
 
@@ -183,10 +183,11 @@ end
 
 
 function main()
-    # curdir = "/home/sagitta/_legend/pss/"
     det_name = "V05266A"
-    stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
-    # stp_name = "V05266A"
+    #stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
+    #stp_name = "V05266A"
+    stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
+    
     # detector simulation
     if isfile("cache/$(det_name).h5f")
         @info "Reading detector h5f"
@@ -220,7 +221,6 @@ function main()
 end
 
 ##
-
 
 
 main()
