@@ -1,25 +1,59 @@
 # PSSJulia
 
-## mcraw -> mcpss
+## mcstp -> mcpss
 
 ```console
-julia mcraw_to_mcpss.jl
+julia mcstp_to_mcpss.jl
 ```
 
-Reads: `data/V05266A.json`, `cache/V05266A_mcraw.h5`
+Reads: `data/V05266A.json` (the first time, then reads cached `h5`), `cache/V05266A_mcstp.h5`
 
-Writes: `cache/V05266A_mcpss.h5`
+Writes: `cache/V05266A_mcpss.h5`, `cache/V05266A.h5f`
 
-## mcpss -> t1pss
+## mcpss -> mcraw
 
 ```console
-julia mcpss_to_t1pss.jl
+julia mcpss_to_mcraw.jl
 ```
 
-Doesn't do anything yet, but breaks down at around waveform number 68, giving an error "trying to access Array at negative index" at lin 194
+Reads: `cache/V05266A_mcpss.h5`
 
-```julia
-stored_waveform = RDWaveform(ts, wf.value[iStart:iStart+daq_nsamples-1]);
+Writes: `cache/V05266A_mcraw.h5`
+
+## Example output
+
+### mcstp -> mcpss
+
+```console
+[redchuk@lfs1 PSSJulia]$ julia mcstp_to_mcpss.jl 
+[ Info: Loading packages...
+[ Info: Reading detector h5f
+[ Info: I/O of charge drift model not yet supported. Loading default: ADLChargeDriftModel
+Reading MC events from HDF5.
+2767819 hits before clustering
+ 17.953064 seconds (39.31 M allocations: 4.119 GiB, 8.40% gc time)
+294636 hits after clustering
+[ Info: Group by detector...
+[ Info: Adding fano noise...
+[ Info: Simulating waveforms...
+[ Info: Detector has 2 contact(s)
+[ Info: Table has 800 physics events (2671 single charge depositions).
+Progress: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| Time: 0:00:07
+[ Info: Generating waveforms...
+Extending tail -> 2000 baseline samples, wf length 8000
+[ Info: Saving table...
+Done
 ```
 
-Line 201 contains a variable `curdir` because testing with Atom-Juno it would write into home directory otherwise and I don't know how to change that :)
+### mcpss -> mcraw
+
+```console
+[redchuk@lfs1 PSSJulia]$ julia mcpss_to_mcraw.jl 
+[ Info: Loading packages...
+[ Info: Reading mcpss
+cache/V05266A_mcpss.h5
+[ Info: Reading MC truth
+cache/V05266A_mcpss.h5
+[ Info: Saving table
+Done
+```
