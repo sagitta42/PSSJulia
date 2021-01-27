@@ -31,8 +31,50 @@ total_waveform_length = 8000;
 
 ##
 
+function main()
+    det_name = "V05266A"
+    mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
+
+    # prepare clustered events for single detector (already in h5 or CSV)
+    mc_events = read_mcstp(mc_name)
+    mc_events = prepare_mcstp(mc_events)
+    mcstp_to_mcpss(det_name, mc_events, mc_name=mc_name)
+end
+
+function mcstp_to_mcpss(det_name, mc_events; mc_name::String="")
+    println("Detector simulation")
+    if isfile("cache/$(det_name).h5f")
+        simulation = SolidStateDetectors.ssd_read("cache/$(det_name).h5f", Simulation)
+    else
+        simulation = simulate_detector(det_name)
+    end
+
+
+    mcstp = MCstp(simulation, mc_events)
+
+    # add fano noise
+    add_fnoise(mcstp)
+
+    # simulate waveforms
+    mcpss_table, mcpss_mctruth = simulate_wf(mcstp)
+
+    # save results
+    if(mc_name != "")
+        println("...saving table")
+        out_filename = "cache/$(mc_name)_mcpss.h5"
+        println("-> $out_filename")
+        h5open(out_filename, "w") do f
+            LegendDataTypes.writedata(f, "mcpss/mcpss", mcpss_table)
+            LegendDataTypes.writedata(f, "mcpss/mctruth", mcpss_mctruth)
+        end
+        println("Done")
+    end
+
+    mcpss_table, mcpss_mctruth 
+
+end
+
 function simulate_detector(det_name)
-    @info "Detector simulation"
     det_geom = "data/$(det_name).json"
     println("Reading geometry from $det_geom")
 
@@ -56,7 +98,7 @@ function simulate_detector(det_name)
         calculate_weighting_potential!(simulation, contact.id, max_refinements = 4, n_points_in_φ = 2, verbose = false)
     end
 
-    println("Saving...")
+    println("-> Saving...")
     det_h5 = "cache/$(det_name).h5f"
 
     if !ispath(dirname(det_h5)) mkpath(dirname(det_h5)) end
@@ -68,7 +110,7 @@ function simulate_detector(det_name)
 end
 
 
-function read_mc_events(mcfilename)
+function read_mcstp(mcfilename)
     # Let's read in some Monte-Carlo events (produced by Geant4).
     # We'll either read from Geant4 CSV and cache the result as HDF5,
     # or read directly from HDF5 if already available:
@@ -96,9 +138,7 @@ function read_mc_events(mcfilename)
 end
 
 ##
-function make_mc_events(filename)
-
-    mc_events = read_mc_events(filename)
+function prepare_mcstp(mc_events)
 
     # Producing pulse shapes from raw MC events is wastful,
     # it's more efficient to cluster detectors hits (within a small radius) first:
@@ -108,7 +148,7 @@ function make_mc_events(filename)
 
     # Waveform generation has to be per detector.
     # Let's reshuffle the detector hits, grouping by event number and detector:
-    @info "Group by detector..."
+    println("...group by detector")
     hits = ungroup_by_evtno(mc_events_clustered)
     mc_events_per_det = group_by_evtno_and_detno(hits)
 
@@ -133,7 +173,7 @@ end
 
 
 function add_fnoise(mcstp)
-    @info "Adding fano noise..."
+    println("...adding fano noise")
     det_material = mcstp.simulation.detector.semiconductors[1].material
     mcstp.mc_events = add_fano_noise(mcstp.mc_events, det_material.E_ionisation, det_material.f_fano)
 end
@@ -146,7 +186,7 @@ function simulate_wf(mcstp)
 
     filtered_events = mcstp.mc_events[findall(pts -> all(p -> T.(ustrip.(uconvert.(u"m", p))) in mcstp.simulation.detector, pts), mcstp.mc_events.pos)];
 
-    @info "Simulating waveforms..."
+    println("Simulating waveforms")
     contact_charge_signals = SolidStateDetectors.simulate_waveforms(
             # filtered_events[1:2000],
             filtered_events[1:800],
@@ -158,7 +198,7 @@ function simulate_wf(mcstp)
     waveforms = ArrayOfRDWaveforms(contact_charge_signals.waveform)
 
     # extend tail
-    println("Extending tail -> $(n_baseline_samples) baseline samples, wf length $(total_waveform_length)")
+    println("...extending tail -> $(n_baseline_samples) baseline samples, wf length $(total_waveform_length)")
     waveforms = ArrayOfRDWaveforms(SolidStateDetectors.add_baseline_and_extend_tail.(waveforms, n_baseline_samples, total_waveform_length));
 
     # convert to Tier1 format
@@ -182,45 +222,4 @@ end
 ##
 
 
-function main()
-    det_name = "V05266A"
-    #stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
-    #stp_name = "V05266A"
-    stp_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
-    
-    # detector simulation
-    if isfile("cache/$(det_name).h5f")
-        @info "Reading detector h5f"
-        simulation = SolidStateDetectors.ssd_read("cache/$(det_name).h5f", Simulation)
-    else
-        simulation = simulate_detector(det_name)
-    end
-
-
-    # prepare clustered events for single detector (already in h5 or CSV)
-    mc_events = make_mc_events(stp_name)
-
-    mcstp = MCstp(simulation, mc_events)
-
-    # add fano noise
-    add_fnoise(mcstp)
-
-    # simulate waveforms
-    mcpss_table, mcpss_mctruth = simulate_wf(mcstp)
-
-    # save results
-    @info "Saving table..."
-    out_filename = "cache/$(stp_name)_mcpss.h5"
-    println("-> $out_filename")
-    h5open(out_filename, "w") do f
-        LegendDataTypes.writedata(f, "mcpss/mcpss", mcpss_table)
-        LegendDataTypes.writedata(f, "mcpss/mctruth", mcpss_mctruth)
-    end
-    println("Done")
-
-end
-
-##
-
-
-main()
+#main()

@@ -15,26 +15,25 @@ using Unitful
 
 
 function main()
-    # raw_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
-    raw_dir = "data/"
+    g4_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
     processed_dir = "cache/"
     base_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
     raw_extension = ".hdf5"
     processed_extension = ".h5"
 
     @info "Processing g4 events"
-    processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extension, processed_extension)
+    mcstp = g4_to_mcstp(g4_dir, processed_dir, base_filename, raw_extension, processed_extension, save=true)
 end
 
 
-function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extension, processed_extension; icpc::Bool=false, oppi::Bool=false)
+function g4_to_mcstp(g4_dir, processed_dir, base_filename, raw_extension, processed_extension; save::Bool=false)
     # Use when you want to process a raw g4simple simulation output (hdf5) into a Table grouped by event
     # This produces a Table in a .lh5 file that can then be directly input into the SSD
     # SolidStateDetectors.simulate_waveforms() function for waveform generation from monte-carlo simulated events
 
 
     # Read raw g4simple HDF5 output file and construct arrays of corresponding data
-    filename = raw_dir * base_filename * raw_extension
+    filename = g4_dir * base_filename * raw_extension
     println("Processing file: $filename")
     g4sfile = h5open(filename, "r")
     g4sntuple = g4sfile["default_ntuples"]["g4sntuple"]
@@ -70,7 +69,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     pos = [ SVector{3}(([ x[i], y[i], z[i] ] .* u"mm")...) for i in 1:n_ind ]
 
 
-    println("Constructing DataFrame")
+    println("...constructing DataFrame")
     # Construct a Julia DataFrame with the arrays we just constructed from the g4sfile data to make grouping easier
     raw_df = DataFrame(
             evtno = evtno,
@@ -87,7 +86,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
         )
 
 
-    println("Group by volume")
+    println("...group by volume")
     # Save only events that occur in the detector PV
     gdf = groupby(raw_df, :volID)
 
@@ -98,7 +97,7 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # Need to turn DataFrame into a Table before using internal SSD functions (group_by_evtno, cluster_detector_hits, etc)
     # Only include parameters needed by SSD
 
-    println("Constructing table")
+    println("...constructing table")
     hits_flat = Table(
         evtno = det_hits.evtno,
         detno = det_hits.detno,
@@ -118,16 +117,18 @@ function processEvents_forSSD(raw_dir, processed_dir, base_filename, raw_extensi
     # println(typeof(out_filename))
 
     # Save output to .lh5
-    h5open(out_filename, "w") do f
-#        LegendDataTypes.writedata(f, "SSD_detEvents", hits_by_det)
-#        LegendDataTypes.writedata(f, "mctruth", hits_by_det)
-        LegendDataTypes.writedata(f, "mctruth", hits_by_evtno)
+    if(save)
+        h5open(out_filename, "w") do f
+            LegendDataTypes.writedata(f, "mctruth", hits_by_evtno)
+        end
+        println("Processed file save to: $out_filename")
     end
 
-    println("Processed file save to: $out_filename")
+    hits_by_evtno
+
 
 end
 
 ##
 
-main()
+#main()

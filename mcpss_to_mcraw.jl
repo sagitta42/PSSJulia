@@ -52,6 +52,124 @@ pa_τ_rise = T(2)*u"ns"
 
 noise_σ = uconvert(u"eV", T(3)u"keV") / germanium_ionization_energy
 
+##
+
+function main()
+    ### Read mcpss events
+    mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
+
+    mcpss = read_mcpss("cache/$(mc_name)_mcpss.h5")
+    mctruth = read_mctruth("cache/$(mc_name)_mcpss.h5")
+    mcpss_to_mcraw(mcpss, mctruth, mc_name)
+end
+
+function mcpss_to_mcraw(mcpss, mctruth, mc_name)
+    ### Create arrays to be filled with results, and online energy
+    idx_end = size(mcpss.waveform,1)
+    wf_array = Array{RDWaveform}(undef, idx_end)
+    temp = 1.0u"keV"; K = typeof(temp);
+    online_energy = Array{K}(undef, idx_end)
+    baseline = Array{T}(undef, idx_end)
+    baseline_rms = Array{T}(undef, idx_end)
+
+    @info "Processing waveforms..."
+    ### loop over each wf and process it
+    for i = 1:idx_end
+        ### Differentiate
+        wf = differentiate_wf(mcpss.waveform[i])
+        wf_array[i] = wf
+
+        ### 1. PreAmp Simulation
+
+        #### 1.1. Simulate a charge sensitive amplifier (`CSA`)
+        wf_array[i] = simulate_csa(wf_array[i])
+
+        # plot_wf = plot(
+        #     begin
+        #         plot(mcpss.waveform[i], label = "true")
+        #         plot!(wf_array[i], label = "CSA Output")
+        #     end,
+        #     plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
+        #     layout = (2, 1)
+        # )
+        # png(plot_wf, "step03-preamp-decay1_wf$i.png")
+
+
+        #### 1.2. Noise
+        wf_array[i] = simulate_noise(wf_array[i])
+
+
+        ### 2. DAQ Simulation
+
+        # Now we want to simulate, what the DAQ records
+        # The waveform will go rough the DAQ buffer on which the DAQ filter runs
+        # in order to trigger in case of an event and calculate some parameters
+        # like online energy
+        # In order to do so. The waveform should be longer the than the DAQ Buffer (here, 5000 samples)
+        # We took care of this at the beginning
+
+        #### 2.1. DAQ units and baseline
+        wf_array[i] = daq_baseline(wf_array[i])
+
+
+        #### 2.2. Trigger method
+        # if online energy is zero, means didn't trigger
+        wf_array[i], online_energy[i] = daq_trigger(wf_array[i])
+
+        # plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
+        # png(plot_wf, "step06-daq-trigger1_wf$i.png")
+
+        baseline[i], baseline_rms[i] = mean_and_std(wf_array[i].value[1:daq_baseline_length])
+
+    end
+
+    wf_final = ArrayOfRDWaveforms(wf_array)
+    wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
+
+    # plot_wf = plot(wf_array)
+    # png(plot_wf, "step02-mcpss-wf-current.png")
+    # png(plot_wf, "step04-preamp-noise1.png")
+    # png(plot_wf, "step05-daq-baseline1.png")
+    # println(online_energy[5])
+    # println(baseline[5])
+
+
+    ##
+    mcraw = Table(
+        baseline = baseline,
+        channel = mcpss.channel,
+        energy = online_energy,
+        ievt = mcpss.ievt,
+        numtraces = ones(length(baseline)), # number of triggered detectors (1 for HADES)
+        packet_id = zeros(length(baseline)), # means to packet losses
+        timestamp = getindex.(mctruth.thit, 1), # frist MC truth hit time of each event?
+        tracelist = VectorOfVectors([[1] for idx in 1:length(baseline)]), # lists of ADCs that triggered, 1 for HADES all the time
+        waveform = wf_final,
+        wf_max = maximum.(wf_final.value), # ?
+        wf_std = std.(wf_final.value[1:daq_baseline_length]) # ?
+    )
+
+
+    ##
+
+    #
+    # electruth = Table(
+    #     # fill in noise and DAQ parameters
+    # )
+
+    #
+
+    @info "Saving table..."
+    out_filename = "cache/$(mc_name)_mcraw.h5"
+    println("-> $out_filename")
+    HDF5.h5open(out_filename, "w") do f
+        LegendDataTypes.writedata(f, "raw", mcraw)
+    end
+    println("Done")
+
+
+end
+
 
 ##
 
@@ -63,7 +181,7 @@ function read_mcpss(filename)
         Table(
             channel = readdata(input, "mcpss/mcpss/channel"),
             ievt = readdata(input, "mcpss/mcpss/ievt"),
-            waveforms = readdata(input, "mcpss/mcpss/waveform")
+            waveform = readdata(input, "mcpss/mcpss/waveform")
         )
     end
 end
@@ -212,121 +330,7 @@ end
 
 ##
 
-function main()
-    ### Read mcpss events
-    det_name = "V05266A"
-    mcpss_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
-    mcpss_file = "cache/$(mcpss_name)_mcpss.h5"
-#    mcpss_file = "cache/$(det_name)_mcpss.h5"
-    mcpss = read_mcpss(mcpss_file)
-
-    ### Create arrays to be filled with results, and online energy
-    idx_end = size(mcpss.waveforms,1)
-    wf_array = Array{RDWaveform}(undef, idx_end)
-    temp = 1.0u"keV"; K = typeof(temp);
-    online_energy = Array{K}(undef, idx_end)
-    baseline = Array{T}(undef, idx_end)
-    baseline_rms = Array{T}(undef, idx_end)
-
-    @info "Processing waveforms..."
-    ### loop over each wf and process it
-    for i = 1:idx_end
-        ### Differentiate
-        wf = differentiate_wf(mcpss.waveforms[i])
-        wf_array[i] = wf
-
-        ### 1. PreAmp Simulation
-
-        #### 1.1. Simulate a charge sensitive amplifier (`CSA`)
-        wf_array[i] = simulate_csa(wf_array[i])
-
-        # plot_wf = plot(
-        #     begin
-        #         plot(mcpss.waveforms[i], label = "true")
-        #         plot!(wf_array[i], label = "CSA Output")
-        #     end,
-        #     plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
-        #     layout = (2, 1)
-        # )
-        # png(plot_wf, "step03-preamp-decay1_wf$i.png")
-
-
-        #### 1.2. Noise
-        wf_array[i] = simulate_noise(wf_array[i])
-
-
-        ### 2. DAQ Simulation
-
-        # Now we want to simulate, what the DAQ records
-        # The waveform will go rough the DAQ buffer on which the DAQ filter runs
-        # in order to trigger in case of an event and calculate some parameters
-        # like online energy
-        # In order to do so. The waveform should be longer the than the DAQ Buffer (here, 5000 samples)
-        # We took care of this at the beginning
-
-        #### 2.1. DAQ units and baseline
-        wf_array[i] = daq_baseline(wf_array[i])
-
-
-        #### 2.2. Trigger method
-        # if online energy is zero, means didn't trigger
-        wf_array[i], online_energy[i] = daq_trigger(wf_array[i])
-
-        # plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
-        # png(plot_wf, "step06-daq-trigger1_wf$i.png")
-
-        baseline[i], baseline_rms[i] = mean_and_std(wf_array[i].value[1:daq_baseline_length])
-
-    end
-
-    wf_final = ArrayOfRDWaveforms(wf_array)
-    wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
-
-    # plot_wf = plot(wf_array)
-    # png(plot_wf, "step02-mcpss-wf-current.png")
-    # png(plot_wf, "step04-preamp-noise1.png")
-    # png(plot_wf, "step05-daq-baseline1.png")
-    # println(online_energy[5])
-    # println(baseline[5])
-
-    mctruth = read_mctruth(mcpss_file)
-
-    ##
-    mcraw = Table(
-        baseline = baseline,
-        channel = mcpss.channel,
-        energy = online_energy,
-        ievt = mcpss.ievt,
-        numtraces = ones(length(baseline)), # number of triggered detectors (1 for HADES)
-        packet_id = zeros(length(baseline)), # means to packet losses
-        timestamp = getindex.(mctruth.thit, 1), # frist MC truth hit time of each event?
-        tracelist = VectorOfVectors([[1] for idx in 1:length(baseline)]), # lists of ADCs that triggered, 1 for HADES all the time
-        waveform = wf_final,
-        wf_max = maximum.(wf_final.value), # ?
-        wf_std = std.(wf_final.value[1:daq_baseline_length]) # ?
-    )
-
-
-    ##
-
-    #
-    # electruth = Table(
-    #     # fill in noise and DAQ parameters
-    # )
-
-    #
-
-    @info "Saving table..."
-    out_filename = "cache/$(mcpss_name)_mcraw.h5"
-    println("-> $out_filename")
-    HDF5.h5open(out_filename, "w") do f
-        LegendDataTypes.writedata(f, "raw", mcraw)
-    end
-    println("Done")
-
-
-end
 
 ##
 
-main()
+#main()
