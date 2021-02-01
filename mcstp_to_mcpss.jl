@@ -33,6 +33,7 @@ total_waveform_length = 8000;
 
 function main()
     det_name = "V05266A"
+#    mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
     mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
 
     # prepare clustered events for single detector (already in h5 or CSV)
@@ -189,7 +190,8 @@ function simulate_wf(mcstp)
     println("Simulating waveforms")
     contact_charge_signals = SolidStateDetectors.simulate_waveforms(
             # filtered_events[1:2000],
-            filtered_events[1:800],
+            # filtered_events[1:800],
+            filtered_events,
             mcstp.simulation,
             max_nsteps = 4000,
             Δt = 1u"ns",

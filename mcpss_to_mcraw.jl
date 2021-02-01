@@ -23,6 +23,8 @@ import HDF5
 
 using Plots
 
+#using ProgressMeter
+
 ## Fix basic parameters
 
 T = Float32
@@ -56,6 +58,7 @@ noise_σ = uconvert(u"eV", T(3)u"keV") / germanium_ionization_energy
 
 function main()
     ### Read mcpss events
+#    mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
     mc_name = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
 
     mcpss = read_mcpss("cache/$(mc_name)_mcpss.h5")
@@ -74,29 +77,40 @@ function mcpss_to_mcraw(mcpss, mctruth, mc_name)
 
     @info "Processing waveforms..."
     ### loop over each wf and process it
-    for i = 1:idx_end
+#    idx_end = 4099
+#    for i in 4098:idx_end
+    for i in 1:idx_end
+#    @showprogress 1 "Processing..." for i in 1:idx_end
+        println("$i / $idx_end")
+#        plot_wf = plot(mcpss.waveform[i])
+#        png(plot_wf, "step01-mcpss-wf_wf$i.png")
+
         ### Differentiate
         wf = differentiate_wf(mcpss.waveform[i])
         wf_array[i] = wf
+#        plot_wf = plot(wf_array[i])
+#        png(plot_wf, "step02-mcpss-wf-current_wf$i.png")
 
         ### 1. PreAmp Simulation
 
         #### 1.1. Simulate a charge sensitive amplifier (`CSA`)
         wf_array[i] = simulate_csa(wf_array[i])
 
-        # plot_wf = plot(
-        #     begin
-        #         plot(mcpss.waveform[i], label = "true")
-        #         plot!(wf_array[i], label = "CSA Output")
-        #     end,
-        #     plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
-        #     layout = (2, 1)
-        # )
-        # png(plot_wf, "step03-preamp-decay1_wf$i.png")
+#        plot_wf = plot(
+#            begin
+#                plot(mcpss.waveform[i], label = "true")
+#                plot!(wf_array[i], label = "CSA Output")
+#            end,
+#            plot(wf_array[i], xlims = (2000-1000, 2000+1000)),
+#            layout = (2, 1)
+#        )
+#        png(plot_wf, "step03-preamp-decay_wf$i.png")
 
 
         #### 1.2. Noise
         wf_array[i] = simulate_noise(wf_array[i])
+#        plot_wf = plot(wf_array[i])
+#        png(plot_wf, "step04-preamp-noise_wf$i.png")
 
 
         ### 2. DAQ Simulation
@@ -110,14 +124,16 @@ function mcpss_to_mcraw(mcpss, mctruth, mc_name)
 
         #### 2.1. DAQ units and baseline
         wf_array[i] = daq_baseline(wf_array[i])
+#        plot_wf = plot(wf_array[i])
+#        png(plot_wf, "step05-daq-baseline_wf$i.png")
 
 
         #### 2.2. Trigger method
         # if online energy is zero, means didn't trigger
         wf_array[i], online_energy[i] = daq_trigger(wf_array[i])
 
-        # plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
-        # png(plot_wf, "step06-daq-trigger1_wf$i.png")
+#        plot_wf = plot(wf_array[i], label = "Online Energy = $(online_energy[i])", title = "raw-data-like-waveform")
+#        png(plot_wf, "step06-daq-trigger_wf$i.png")
 
         baseline[i], baseline_rms[i] = mean_and_std(wf_array[i].value[1:daq_baseline_length])
 
@@ -125,13 +141,6 @@ function mcpss_to_mcraw(mcpss, mctruth, mc_name)
 
     wf_final = ArrayOfRDWaveforms(wf_array)
     wf_final = ArrayOfRDWaveforms((wf_final.time, VectorOfSimilarVectors(wf_final.value)))
-
-    # plot_wf = plot(wf_array)
-    # png(plot_wf, "step02-mcpss-wf-current.png")
-    # png(plot_wf, "step04-preamp-noise1.png")
-    # png(plot_wf, "step05-daq-baseline1.png")
-    # println(online_energy[5])
-    # println(baseline[5])
 
 
     ##

@@ -6,10 +6,12 @@ function main()
 
     det_name = "V05266A"
     g4_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
+#    mc_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-02"
     mc_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
     processed_dir = "cache/"
 
     @info "----- g4simple -> mcstp"
+#    mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=true)
     mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=false)
 
     @info "----- mcstp -> mcpss"
