@@ -16,6 +16,7 @@ using Unitful
 
 function main()
     g4_dir = "/lfs/l1/legend/detector_char/enr/hades/simulations/legend-g4simple-simulation/IC-legend/IC160A/Th228/uncollimated/top_source_holder/hdf5/"
+#    g4_dir = "data/"
     processed_dir = "cache/"
     base_filename = "raw-IC160A-Th228-uncollimated-top-run0002-source_holder-bi-hdf5-01-test"
     raw_extension = ".hdf5"

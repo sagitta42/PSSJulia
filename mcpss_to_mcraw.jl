@@ -23,7 +23,7 @@ import HDF5
 
 using Plots
 
-#using ProgressMeter
+using ProgressMeter
 
 ## Fix basic parameters
 
@@ -79,9 +79,9 @@ function mcpss_to_mcraw(mcpss, mctruth, mc_name)
     ### loop over each wf and process it
 #    idx_end = 4099
 #    for i in 4098:idx_end
-    for i in 1:idx_end
-#    @showprogress 1 "Processing..." for i in 1:idx_end
-        println("$i / $idx_end")
+#    for i in 1:idx_end
+    @showprogress 1 "Processing..." for i in 1:idx_end
+#        println("$i / $idx_end")
 #        plot_wf = plot(mcpss.waveform[i])
 #        png(plot_wf, "step01-mcpss-wf_wf$i.png")
 

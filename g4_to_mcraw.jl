@@ -11,13 +11,13 @@ function main()
     processed_dir = "cache/"
 
     @info "----- g4simple -> mcstp"
-#    mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=true)
-    mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=false)
+    mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=true)
+#    mcstp = g4_to_mcstp(g4_dir, processed_dir, mc_filename, ".hdf5", ".h5", save=false)
 
     @info "----- mcstp -> mcpss"
     mc_events = prepare_mcstp(mcstp)
-    mcpss, mctruth = mcstp_to_mcpss(det_name, mc_events)
-#    mcpss, mctruth = mcstp_to_mcpss(det_name, mc_events, mc_name=mc_filename) # if name given, will save the file
+#    mcpss, mctruth = mcstp_to_mcpss(det_name, mc_events)
+    mcpss, mctruth = mcstp_to_mcpss(det_name, mc_events, mc_name=mc_filename) # if name given, will save the file
 
     @info "----- mcpss -> mcraw"
     mcpss_to_mcraw(mcpss, mctruth, mc_filename) # saves the final output
